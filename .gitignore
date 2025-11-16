@@ -1,0 +1,53 @@
+# Python Virtual Environment
+mlagents-env/
+venv/
+env/
+*.pyc
+__pycache__/
+
+# ML-Agents Results and Models
+results/
+models/
+*.pt
+*.onnx
+
+# ML-Agents Repository (users should clone themselves)
+ml-agents/
+
+# Unity Generated Files
+MLAgent/Library/
+MLAgent/Temp/
+MLAgent/Logs/
+MLAgent/obj/
+MLAgent/Build/
+MLAgent/Builds/
+MLAgent/UserSettings/
+
+# Unity Crash Logs
+MLAgent/*.log
+MLAgent/sysinfo.txt
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python
+.python-version
+*.py[cod]
+*$py.class
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Recordings (optional - include if you want to share videos)
+MLAgent/Recordings/
+
