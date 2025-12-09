@@ -52,6 +52,7 @@
     <Compile Include="Assets/BlockAgent.cs" />
     <Compile Include="Assets/PlayerControlUI.cs" />
     <Compile Include="Assets/TutorialInfo/Scripts/Readme.cs" />
+    <Compile Include="Assets/ObstacleManager.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
