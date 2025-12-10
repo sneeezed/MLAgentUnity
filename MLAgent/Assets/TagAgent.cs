@@ -2,417 +2,369 @@ using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
+using UnityEngine.InputSystem;
 
 public class TagAgent : Agent
 {
-    [Header("Agent References")]
-    public Transform otherAgent;
-    
-    [Header("Settings")]
-    public float moveSpeed = 10;
-    public float moveAcceleration = 20;
-    public float rotationSpeed = 200f;
-    public float jumpForce = 80f;
-    public float maxDistance = 15f;
-    public float tagDistance = 3.0f;
-    public int maxStepsPerEpisode = 500;
-    
-    [Header("Visual Settings")]
-    public Color taggerColor = Color.red;
-    public Color runnerColor = Color.blue;
-    public Color taggerWinColor = new Color(1f, 0.5f, 0f); // Orange
-    public Color runnerWinColor = new Color(0.5f, 0f, 1f); // Purple
-    
-    private Rigidbody rb;
-    public Renderer agentRenderer; // Public so other agent can change color
-    private Vector3 startPosition;
-    private Quaternion startRotation;
-    private bool isTagger;
-    private int episodeSteps;
-    private bool isGrounded;
-    
-    // Reference to the other agent's script to coordinate episodes
-    private TagAgent otherAgentScript;
-    
-    // Track rewards for logging (public so other agent can access)
-    public float cumulativeTaggerReward = 0f;
-    public float cumulativeRunnerReward = 0f;
-    public int taggerEpisodes = 0;
-    public int runnerEpisodes = 0;
-    private int taggerWins = 0;
-    private int runnerWins = 0;
-    
-    // Track previous distance for movement reward
-    private float previousDistance = 0f;
-    
-    // Win celebration tracking
-    private float winCelebrationTimer = 0f;
-    private bool isShowingWin = false;
+    [Header("References")]
+    public TagAgent otherAgent; // Reference to the other agent
+    public ObstacleManager obstacleManager;
+    public Transform areaCenter; // Center point of play area
 
+    [Header("Game Settings")]
+    public float moveSpeed = 5f; // Moderate speed when using VelocityChange
+    public float maxDistance = 15f; // Distance from center before penalty
+    public float tagDistance = 2f; // How close to be tagged
+    public int maxStepsPerEpisode = 500;
+
+    [Header("Reward Settings")]
+    public float taggerCatchReward = 1.0f;
+    public float runnerSurviveReward = 1.0f;
+    public float approachReward = 0.01f; // Tagger reward for getting closer
+    public float evadeReward = 0.01f; // Runner reward for getting farther
+    public float speedRewardMultiplier = 0.0003f;
+    public float stuckPenalty = -0.005f;
+    public float stuckTimeout = 5f;
+
+    [Header("Visual")]
+    public Material taggerMaterial; // Red material for tagger
+    public Material runnerMaterial; // Blue material for runner
+
+    [Header("Spawner Control")]
+    public bool isSpawner = true; // Only one agent should spawn/reset environment
+
+    // State
+    private Rigidbody rb;
+    private Vector3 startPosition;
+    private Renderer agentRenderer;
+    private bool isTagger;
+    private int stepCount;
+    private float previousDistanceToOther;
+    
+    // Stuck detection
+    private Vector3 previousPosition;
+    private int stuckCounter;
+    private float stuckStartTime;
+
+    public bool IsTagger => isTagger;
 
     public override void Initialize()
     {
         rb = GetComponent<Rigidbody>();
         agentRenderer = GetComponent<Renderer>();
         startPosition = transform.localPosition;
-        startRotation = transform.localRotation;
-        
-        if (otherAgent != null)
+
+        // Setup physics
+        if (rb != null)
         {
-            otherAgentScript = otherAgent.GetComponent<TagAgent>();
+            rb.useGravity = true; // Enable gravity
+            rb.constraints = RigidbodyConstraints.FreezeRotationX | 
+                            RigidbodyConstraints.FreezeRotationY | 
+                            RigidbodyConstraints.FreezeRotationZ; // Freeze rotations but allow Y movement for gravity
+            rb.linearDamping = 0.1f;   // Slightly more drag to prevent sliding
+            rb.angularDamping = 0.1f;
+        }
+
+        // Setup obstacle manager (only once, from one agent)
+        if (obstacleManager != null && otherAgent != null)
+        {
+            obstacleManager.target = transform; // Use one agent as reference
+            obstacleManager.agent = otherAgent.transform;
         }
     }
 
     public override void OnEpisodeBegin()
     {
-        // Reset position and physics
+        // Reset agent
         transform.localPosition = startPosition;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
-        transform.localRotation = startRotation;
+        transform.rotation = Quaternion.identity;
         
-        episodeSteps = 0;
-        
-        // Track which role this episode
-        if (isTagger)
+        // Reset stuck detection
+        previousPosition = startPosition;
+        stuckCounter = 0;
+        stuckStartTime = -1f;
+        stepCount = 0;
+
+        // Only one agent controls the episode setup
+        if (otherAgent != null && isSpawner)
         {
-            taggerEpisodes++;
+            // Randomly assign roles
+            bool thisIsTagger = Random.value > 0.5f;
+            AssignRole(thisIsTagger);
+            otherAgent.AssignRole(!thisIsTagger);
+
+            // Spawn agents on opposite sides
+            float spawnDistance = 7f;
+            float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            
+            transform.localPosition = new Vector3(
+                Mathf.Cos(angle) * spawnDistance,
+                0.5f,
+                Mathf.Sin(angle) * spawnDistance
+            );
+            
+            otherAgent.transform.localPosition = new Vector3(
+                Mathf.Cos(angle + Mathf.PI) * spawnDistance,
+                0.5f,
+                Mathf.Sin(angle + Mathf.PI) * spawnDistance
+            );
+
+            // Spawn obstacle
+            if (obstacleManager != null)
+            {
+                obstacleManager.SpawnObstacle();
+                Debug.Log($"[TagAgent] OnEpisodeBegin -> obstacle spawned (agent: {gameObject.name})");
+            }
+            else
+            {
+                Debug.LogWarning($"[TagAgent] ObstacleManager not set on {gameObject.name}");
+            }
         }
         else
         {
-            runnerEpisodes++;
+            Debug.Log($"[TagAgent] OnEpisodeBegin skipped spawn (agent: {gameObject.name}, isSpawner={isSpawner}, siblingIndex={transform.GetSiblingIndex()})");
         }
-        
-        // Initialize previous distance
+
+        // Calculate initial distance
         if (otherAgent != null)
         {
-            previousDistance = Vector3.Distance(transform.localPosition, otherAgent.localPosition);
+            previousDistanceToOther = Vector3.Distance(transform.localPosition, otherAgent.transform.localPosition);
         }
+    }
+
+    public void AssignRole(bool tagger)
+    {
+        isTagger = tagger;
         
-        // Randomly assign roles (only one agent decides for both)
-        // Use a deterministic check so only one agent assigns roles
-        if (transform.GetInstanceID() < otherAgent.GetInstanceID())
-        {
-            // This agent decides roles for both
-            isTagger = Random.value > 0.5f;
-            otherAgentScript.SetRole(!isTagger);
-        }
-        
-        // Update visual representation
-        UpdateVisuals();
-    }
-    
-    public void SetRole(bool isTaggerRole)
-    {
-        isTagger = isTaggerRole;
-        UpdateVisuals();
-    }
-    
-    private void UpdateVisuals()
-    {
-        if (agentRenderer != null && !isShowingWin)
-        {
-            agentRenderer.material.color = isTagger ? taggerColor : runnerColor;
-        }
-    }
-    
-    public void ShowWinCelebration(bool taggerWon, float duration = 0.5f)
-    {
+        // Set visual appearance
         if (agentRenderer != null)
         {
-            agentRenderer.material.color = taggerWon ? taggerWinColor : runnerWinColor;
-            isShowingWin = true;
-            winCelebrationTimer = duration;
+            if (isTagger && taggerMaterial != null)
+            {
+                agentRenderer.material = taggerMaterial;
+            }
+            else if (!isTagger && runnerMaterial != null)
+            {
+                agentRenderer.material = runnerMaterial;
+            }
         }
     }
 
     private void FixedUpdate()
     {
-        episodeSteps++;
-        
-        // Handle win celebration timer
-        if (isShowingWin)
-        {
-            winCelebrationTimer -= Time.fixedDeltaTime;
-            if (winCelebrationTimer <= 0f)
-            {
-                isShowingWin = false;
-                UpdateVisuals(); // Reset to normal role colors
-            }
-        }
-        
-        // Check if episode should end due to time limit
-        if (episodeSteps >= maxStepsPerEpisode)
-        {
-            if (isTagger)
-            {
-                // Tagger failed to catch runner
-                SetReward(-0.5f);
-            }
-            else
-            {
-                // Runner survived the whole episode!
-                AddReward(0.5f);
-                runnerWins++;
-                
-                // Show runner winning in purple
-                ShowWinCelebration(false, 0.5f);
-            }
-            LogEpisodeStats();
-            EndEpisode();
-            otherAgentScript.EndEpisode();
-        }
-        
         RequestDecision();
+        stepCount++;
     }
 
     public override void CollectObservations(VectorSensor sensor)
     {
-        if (otherAgent == null) return;
-        
-        if (rb == null)
+        // Self observations
+        sensor.AddObservation(transform.localPosition); // 3
+        sensor.AddObservation(rb.linearVelocity); // 3
+        sensor.AddObservation(isTagger ? 1f : 0f); // 1 - role
+
+        // Other agent observations
+        if (otherAgent != null)
         {
-            rb = GetComponent<Rigidbody>();
+            sensor.AddObservation(otherAgent.transform.localPosition); // 3
+            sensor.AddObservation(otherAgent.rb.linearVelocity); // 3
+            
+            Vector3 directionToOther = (otherAgent.transform.localPosition - transform.localPosition).normalized;
+            sensor.AddObservation(directionToOther); // 3
+            
+            float distanceToOther = Vector3.Distance(transform.localPosition, otherAgent.transform.localPosition);
+            sensor.AddObservation(distanceToOther); // 1
         }
-        
-        Rigidbody otherRb = otherAgent.GetComponent<Rigidbody>();
-        if (otherRb == null) return;
-        
-        // Role information (1 value)
-        sensor.AddObservation(isTagger ? 1f : 0f);
-        
-        // Grounded state (1 value)
-        sensor.AddObservation(isGrounded ? 1f : 0f);
-        
-        // My position relative to center (3 values)
-        sensor.AddObservation(transform.localPosition);
-        
-        // My velocity (3 values)
-        sensor.AddObservation(rb.linearVelocity);
-        
-        // My forward direction (3 values)
-        sensor.AddObservation(transform.forward);
-        
-        // Other agent's position relative to center (3 values)
-        sensor.AddObservation(otherAgent.localPosition);
-        
-        // Other agent's velocity (3 values)
-        sensor.AddObservation(otherRb.linearVelocity);
-        
-        // Direction to other agent (normalized) (3 values)
-        Vector3 directionToOther = (otherAgent.localPosition - transform.localPosition).normalized;
-        sensor.AddObservation(directionToOther);
-        
-        // Distance to other agent (1 value)
-        float distanceToOther = Vector3.Distance(transform.localPosition, otherAgent.localPosition);
-        sensor.AddObservation(distanceToOther / maxDistance); // Normalize
-        
-        // Time remaining in episode (normalized) (1 value)
-        sensor.AddObservation((float)episodeSteps / maxStepsPerEpisode);
-        
-        // Total observations: 22
+        else
+        {
+            sensor.AddObservation(Vector3.zero); // 3
+            sensor.AddObservation(Vector3.zero); // 3
+            sensor.AddObservation(Vector3.zero); // 3
+            sensor.AddObservation(0f); // 1
+        }
+
+        // Obstacle observations
+        if (obstacleManager != null && obstacleManager.HasObstacle())
+        {
+            Vector3 obstaclePos = obstacleManager.GetObstaclePosition();
+            Rigidbody obstacleRb = obstacleManager.GetObstacleRigidbody();
+            
+            sensor.AddObservation(obstaclePos - transform.localPosition); // 3
+            sensor.AddObservation(obstacleRb != null ? obstacleRb.linearVelocity : Vector3.zero); // 3
+        }
+        else
+        {
+            sensor.AddObservation(Vector3.zero); // 3
+            sensor.AddObservation(Vector3.zero); // 3
+        }
+
+        // Total observations: 23
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
-        if (otherAgent == null) return;
+        // Movement
+        float moveX = actions.ContinuousActions[0];
+        float moveZ = actions.ContinuousActions[1];
         
-        // Get movement actions
-        float moveForward = actions.ContinuousActions[0]; // -1 to 1 (forward/backward)
-        float rotate = actions.ContinuousActions[1]; // -1 to 1 (left/right)
-        int jumpAction = actions.DiscreteActions[0]; // 0 or 1
-        
-        // Movement for both agents
-        Vector3 moveDirection = transform.forward * moveForward;
-        Vector3 newPosition = rb.position + moveDirection * moveSpeed * Time.fixedDeltaTime;
-        rb.MovePosition(newPosition);
-        
-        // Apply rotation
-        transform.Rotate(0, rotate * rotationSpeed * Time.fixedDeltaTime, 0);
-        
-        // Apply jump (with penalty to discourage spam)
-        if (jumpAction == 1 && isGrounded)
+        Vector3 movement = new Vector3(moveX, 0, moveZ) * moveSpeed;
+        // Use VelocityChange so movement is responsive but clamp top speed
+        rb.AddForce(movement, ForceMode.VelocityChange);
+
+        // Clamp max speed for stability
+        float maxSpeed = 6f;
+        if (rb.linearVelocity.magnitude > maxSpeed)
         {
-            rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpForce, rb.linearVelocity.z);
-            AddReward(-0.05f); // Penalty for jumping
+            rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
         }
-        
-        // Calculate distance to other agent
-        float distanceToOther = Vector3.Distance(transform.localPosition, otherAgent.localPosition);
-        
-        // Reward tagger for getting CLOSER (based on change in distance)
-        if (isTagger)
+
+        // Check if out of bounds
+        float distanceFromCenter = Vector3.Distance(transform.localPosition, areaCenter.localPosition);
+        if (transform.localPosition.y < -1f || distanceFromCenter > maxDistance)
         {
-            float distanceChange = previousDistance - distanceToOther;
-            if (distanceChange > 0)
+            SetReward(-1.0f);
+            EndEpisode();
+            if (otherAgent != null) otherAgent.EndEpisode();
+            return;
+        }
+
+        // Check for tag
+        if (otherAgent != null)
+        {
+            float distanceToOther = Vector3.Distance(transform.localPosition, otherAgent.transform.localPosition);
+            
+            if (distanceToOther < tagDistance)
             {
-                // Moving closer - BIG reward
-                AddReward(distanceChange * 0.5f);
+                // Tag happened!
+                if (isTagger)
+                {
+                    SetReward(taggerCatchReward);
+                    otherAgent.SetReward(-runnerSurviveReward);
+                    ScoreDisplay.TaggerWon(); // Update score display
+                }
+                else
+                {
+                    SetReward(-runnerSurviveReward);
+                    otherAgent.SetReward(taggerCatchReward);
+                    ScoreDisplay.TaggerWon(); // Update score display
+                }
+                EndEpisode();
+                otherAgent.EndEpisode();
+                return;
+            }
+
+            // Shaped rewards based on role
+            if (isTagger)
+            {
+                // Reward tagger for getting closer
+                if (distanceToOther < previousDistanceToOther)
+                {
+                    AddReward(approachReward);
+                }
             }
             else
             {
-                // Moving away - penalty
-                AddReward(distanceChange * 0.3f);
+                // Reward runner for getting farther
+                if (distanceToOther > previousDistanceToOther)
+                {
+                    AddReward(evadeReward);
+                }
             }
-            previousDistance = distanceToOther;
+
+            previousDistanceToOther = distanceToOther;
         }
-        
-        // Check for tag
-        if (distanceToOther < tagDistance)
+
+        // Check if max steps reached (runner wins)
+        if (stepCount >= maxStepsPerEpisode)
         {
             if (isTagger)
             {
-                // Tagger caught the runner!
-                SetReward(1.0f);
-                otherAgentScript.SetReward(-1.0f);
-                taggerWins++;
-                
-                // Show tagger winning in orange
-                ShowWinCelebration(true, 0.5f);
-                
-                LogEpisodeStats();
-                EndEpisode();
-                otherAgentScript.EndEpisode();
-                return;
+                SetReward(-taggerCatchReward); // Tagger failed
             }
+            else
+            {
+                SetReward(runnerSurviveReward); // Runner survived!
+            }
+            ScoreDisplay.RunnerWon(); // Update score display
+            EndEpisode();
+            if (otherAgent != null) otherAgent.EndEpisode();
+            return;
         }
-        
-        // Role-specific rewards
-        if (isTagger)
+
+        // Stuck detection
+        float movementDistance = Vector3.Distance(transform.localPosition, previousPosition);
+        if (movementDistance < 0.01f)
         {
-            // Small time penalty to encourage speed
-            AddReward(-0.001f);
+            stuckCounter++;
+            if (stuckCounter > 10)
+            {
+                AddReward(stuckPenalty);
+                
+                if (stuckStartTime < 0f)
+                {
+                    stuckStartTime = Time.time;
+                }
+                else if (Time.time - stuckStartTime > stuckTimeout)
+                {
+                    SetReward(-1.0f);
+                    EndEpisode();
+                    if (otherAgent != null) otherAgent.EndEpisode();
+                    return;
+                }
+            }
         }
         else
         {
-            // Runner: reward for surviving and staying away
-            AddReward(0.01f); // Reward per step survived
-            
-            // Reward runner for staying far from tagger
-            if (distanceToOther > tagDistance * 2)
-            {
-                AddReward(0.01f); // Bonus for maintaining good distance
-            }
+            stuckCounter = 0;
+            stuckStartTime = -1f;
         }
-        
-        // Severe penalty for falling off the map (below ground)
-        if (transform.localPosition.y < -2f)
+
+        previousPosition = transform.localPosition;
+
+        // Small speed reward when not stuck
+        if (stuckCounter == 0)
         {
-            SetReward(-5.0f); // Much harsher penalty for falling
-            
-            if (isTagger)
-            {
-                // Tagger fell - runner wins big
-                otherAgentScript.AddReward(2.0f);
-                runnerWins++;
-                
-                // Show the winning runner in purple
-                otherAgentScript.ShowWinCelebration(false, 0.5f);
-            }
-            else
-            {
-                // Runner fell - tagger wins but gets less reward
-                otherAgentScript.AddReward(0.5f);
-                taggerWins++;
-                
-                // Show the winning tagger in orange
-                otherAgentScript.ShowWinCelebration(true, 0.5f);
-            }
-            
-            LogEpisodeStats();
-            EndEpisode();
-            otherAgentScript.EndEpisode();
+            float speed = rb.linearVelocity.magnitude;
+            AddReward(speed * speedRewardMultiplier);
         }
+
+        // Small time penalty for efficiency
+        AddReward(-0.0005f);
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)
     {
-        // Manual control for testing with keyboard
         var continuousActions = actionsOut.ContinuousActions;
-        var discreteActions = actionsOut.DiscreteActions;
         
-        // W/S or Up/Down arrows for forward/backward
-        continuousActions[0] = Input.GetAxis("Vertical");
-        
-        // A/D or Left/Right arrows for rotation
-        continuousActions[1] = Input.GetAxis("Horizontal");
-        
-        // Space for jump
-        discreteActions[0] = Input.GetKey(KeyCode.Space) ? 1 : 0;
-    }
-    
-    // Check if agent is on the ground
-    private void OnCollisionStay(Collision collision)
-    {
-        // Check if we're touching something below us (ground)
-        foreach (ContactPoint contact in collision.contacts)
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
         {
-            if (contact.normal.y > 0.7f) // Surface is relatively flat and pointing up
-            {
-                isGrounded = true;
-                return;
-            }
-        }
-    }
-    
-    private void OnCollisionExit(Collision collision)
-    {
-        isGrounded = false;
-    }
-    
-    private void LogEpisodeStats()
-    {
-        // Track cumulative reward for this episode
-        if (isTagger)
-        {
-            cumulativeTaggerReward += GetCumulativeReward();
-        }
-        else
-        {
-            cumulativeRunnerReward += GetCumulativeReward();
-        }
-        
-        // Only log from one agent to avoid duplicate logs
-        if (transform.GetInstanceID() < otherAgent.GetInstanceID())
-        {
-            // Combine stats from both agents
-            float totalTaggerReward = cumulativeTaggerReward + otherAgentScript.cumulativeTaggerReward;
-            float totalRunnerReward = cumulativeRunnerReward + otherAgentScript.cumulativeRunnerReward;
-            int totalTaggerEps = taggerEpisodes + otherAgentScript.taggerEpisodes;
-            int totalRunnerEps = runnerEpisodes + otherAgentScript.runnerEpisodes;
+            float horizontal = 0f;
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal = -1f;
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal = 1f;
             
-            float totalEpisodes = taggerWins + runnerWins;
+            float vertical = 0f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical = -1f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical = 1f;
             
-            float taggerWinRate = totalEpisodes > 0 ? (taggerWins / totalEpisodes) * 100f : 0f;
-            float runnerWinRate = totalEpisodes > 0 ? (runnerWins / totalEpisodes) * 100f : 0f;
-            
-            float meanTaggerReward = totalTaggerEps > 0 ? totalTaggerReward / totalTaggerEps : 0f;
-            float meanRunnerReward = totalRunnerEps > 0 ? totalRunnerReward / totalRunnerEps : 0f;
-            
-            // Log every 50 episodes to reduce spam
-            if (totalEpisodes > 0 && totalEpisodes % 50 == 0)
-            {
-                print($"[TAG STATS] Ep:{totalEpisodes} | Tagger:{taggerWins}W({taggerWinRate:F0}%)R={meanTaggerReward:F2} | Runner:{runnerWins}W({runnerWinRate:F0}%)R={meanRunnerReward:F2}");
-            }
+            continuousActions[0] = horizontal;
+            continuousActions[1] = vertical;
         }
     }
 
-    // Visualize the relationship between agents
     private void OnDrawGizmos()
     {
         if (otherAgent != null)
         {
-            // Draw line between agents
+            // Draw line to other agent
             Gizmos.color = isTagger ? Color.red : Color.blue;
-            Gizmos.DrawLine(transform.position, otherAgent.position);
+            Gizmos.DrawLine(transform.position, otherAgent.transform.position);
             
-            // Draw tag range for tagger
-            if (isTagger)
-            {
-                Gizmos.color = new Color(1, 0, 0, 0.3f);
-                Gizmos.DrawWireSphere(transform.position, tagDistance);
-            }
+            // Draw tag radius
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, tagDistance);
         }
     }
 }
-

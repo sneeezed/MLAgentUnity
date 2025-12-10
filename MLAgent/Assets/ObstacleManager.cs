@@ -3,11 +3,13 @@ using UnityEngine;
 public class ObstacleManager : MonoBehaviour
 {
     [Header("Obstacle Settings")]
-    public GameObject obstaclePrefab;
+    public GameObject existingObstacle; // Drag your existing obstacle here!
+    public GameObject obstaclePrefab; // Only used if no existing obstacle
     public Vector3 obstacleSize = new Vector3(2f, 0.5f, 1f); // Rectangular shape
     public float obstacleMass = 1f; // Mass affects how easy it is to push
 
     [Header("Spawn Settings")]
+    public Vector3 centerSpawnPosition = new Vector3(0f, 0.2f, 0f); // Center spawn position
     public float minDistanceFromTarget = 3f; // Minimum distance from reward
     public float minDistanceFromAgent = 2f; // Minimum distance from agent
     public Vector3 spawnAreaMin = new Vector3(-7f, 0.25f, -7f);
@@ -48,11 +50,11 @@ public class ObstacleManager : MonoBehaviour
         // Add physics components
         var rb = obstaclePrefab.AddComponent<Rigidbody>();
         rb.mass = obstacleMass;
-        rb.linearDamping = 0.5f; // Some drag to prevent sliding forever
-        rb.angularDamping = 0.2f;
+        rb.linearDamping = 0.1f; // Slight drag
+        rb.angularDamping = 0.1f;
         rb.isKinematic = false; // Make sure it's not kinematic
-        rb.useGravity = false; // No gravity since we're on a plane
-        rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright and on plane
+        rb.useGravity = true; // Enable gravity so it falls naturally
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright but allow Y movement
 
         var boxCollider = obstaclePrefab.AddComponent<BoxCollider>();
 
@@ -64,62 +66,90 @@ public class ObstacleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Spawns or respawns the obstacle at a random valid position
+    /// Spawns or respawns the obstacle at the center of the arena
     /// </summary>
     public void SpawnObstacle()
     {
-        // Remove existing obstacle if any
-        if (currentObstacle != null)
+        Debug.Log("=== SpawnObstacle called ===");
+        
+        Debug.Log("=== SpawnObstacle called ===");
+        // Check if user assigned an existing obstacle
+        if (existingObstacle != null)
         {
-            Destroy(currentObstacle);
-        }
-
-        // Try to find a valid spawn position
-        Vector3 spawnPosition = Vector3.zero;
-        bool validPosition = false;
-        int attempts = 0;
-
-        while (!validPosition && attempts < maxSpawnAttempts)
-        {
-            // Generate random position
-            spawnPosition = new Vector3(
-                Random.Range(spawnAreaMin.x, spawnAreaMax.x),
-                Random.Range(spawnAreaMin.y, spawnAreaMax.y),
-                Random.Range(spawnAreaMin.z, spawnAreaMax.z)
-            );
-
-            // Check if position is valid (far enough from target and agent)
-            float distanceToTarget = target != null ? Vector3.Distance(spawnPosition, target.position) : float.MaxValue;
-            float distanceToAgent = agent != null ? Vector3.Distance(spawnPosition, agent.position) : float.MaxValue;
-
-            if (distanceToTarget >= minDistanceFromTarget && distanceToAgent >= minDistanceFromAgent)
+            Debug.Log($"✅ Using existing obstacle: {existingObstacle.name}");
+            
+            // Use the existing obstacle - just reset its position
+            currentObstacle = existingObstacle;
+            
+            // Reset position to center
+            Debug.Log($"Moving obstacle from {currentObstacle.transform.position} to {centerSpawnPosition}");
+            currentObstacle.transform.position = centerSpawnPosition;
+            
+            // Random rotation (only around Y axis to keep it upright)
+            Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+            currentObstacle.transform.rotation = randomRotation;
+            
+            // Reset physics
+            Rigidbody rb = currentObstacle.GetComponent<Rigidbody>();
+            if (rb != null)
             {
-                validPosition = true;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                Debug.Log("✅ Physics velocities reset to zero");
+            }
+            else
+            {
+                Debug.LogWarning("⚠️ Obstacle has no Rigidbody!");
+            }
+            
+            // Make sure it's active
+            currentObstacle.SetActive(true);
+            
+            // Ensure physics is set up properly
+            SetupObstaclePhysics(currentObstacle);
+            
+            Debug.Log($"✅ Existing obstacle '{existingObstacle.name}' reset to center {centerSpawnPosition}");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ No existing obstacle linked! Trying to create dynamic obstacle...");
+            
+            // No existing obstacle - create a new one dynamically
+            
+            // Remove old dynamic obstacle if any
+            if (currentObstacle != null && currentObstacle != existingObstacle)
+            {
+                Destroy(currentObstacle);
             }
 
-            attempts++;
+            // Check if we have a prefab
+            if (obstaclePrefab == null)
+            {
+                Debug.LogError("❌ No obstacle prefab and no existing obstacle! Can't spawn obstacle!");
+                Debug.LogError("💡 FIX: Drag your obstacle from the scene to the 'Existing Obstacle' field in ObstacleManager!");
+                return;
+            }
+
+            // Always spawn at center of arena
+            Vector3 spawnPosition = centerSpawnPosition;
+
+            // Random rotation (only around Y axis to keep it upright)
+            Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+
+            // Instantiate the obstacle
+            currentObstacle = Instantiate(obstaclePrefab, spawnPosition, randomRotation, transform);
+            currentObstacle.SetActive(true);
+            currentObstacle.name = "Obstacle";
+
+            // Ensure the obstacle has proper physics components
+            SetupObstaclePhysics(currentObstacle);
+
+            Debug.Log($"✅ New obstacle spawned at center {centerSpawnPosition}");
         }
-
-        // If we couldn't find a valid position, spawn at a fallback location
-        if (!validPosition)
-        {
-            spawnPosition = new Vector3(5f, 0.25f, 5f); // Fallback position
-        }
-
-        // Random rotation (only around Y axis to keep it upright)
-        Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
-
-        // Instantiate the obstacle
-        currentObstacle = Instantiate(obstaclePrefab, spawnPosition, randomRotation, transform);
-        currentObstacle.SetActive(true);
-        currentObstacle.name = "Obstacle";
-
-        // Ensure the obstacle has proper physics components
-        SetupObstaclePhysics(currentObstacle);
 
         // Store start position and rotation for potential reset
-        obstacleStartPosition = spawnPosition;
-        obstacleStartRotation = randomRotation;
+        obstacleStartPosition = centerSpawnPosition;
+        obstacleStartRotation = currentObstacle.transform.rotation;
     }
 
     /// <summary>
@@ -129,8 +159,16 @@ public class ObstacleManager : MonoBehaviour
     {
         if (currentObstacle != null)
         {
-            currentObstacle.transform.position = obstacleStartPosition;
+            currentObstacle.transform.position = centerSpawnPosition;
             currentObstacle.transform.rotation = obstacleStartRotation;
+
+            // Reset physics velocities
+            Rigidbody rb = currentObstacle.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
 
             // Re-setup physics to ensure it's properly configured
             SetupObstaclePhysics(currentObstacle);
@@ -198,13 +236,13 @@ public class ObstacleManager : MonoBehaviour
 
         // Configure Rigidbody for physics interaction
         rb.mass = obstacleMass;
-        rb.linearDamping = 0.5f; // Some drag to prevent sliding forever
-        rb.angularDamping = 0.2f;
+        rb.linearDamping = 0.1f; // Slight drag
+        rb.angularDamping = 0.1f;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         rb.isKinematic = false; // Must be false for physics
-        rb.useGravity = false; // No gravity in our 2D plane environment
-        rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright and on plane
+        rb.useGravity = true; // Enable gravity so it falls naturally to ground
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright, but allow Y movement for gravity
 
         // Add BoxCollider if not present
         var collider = obstacle.GetComponent<BoxCollider>();
