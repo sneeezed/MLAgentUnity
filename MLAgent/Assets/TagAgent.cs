@@ -332,6 +332,14 @@ public class TagAgent : Agent
 
         // Small time penalty for efficiency
         AddReward(-0.0005f);
+
+        // Update score display with current rewards (only the spawner does this)
+        if (isSpawner && otherAgent != null)
+        {
+            float taggerRew = isTagger ? GetCumulativeReward() : otherAgent.GetCumulativeReward();
+            float runnerRew = isTagger ? otherAgent.GetCumulativeReward() : GetCumulativeReward();
+            ScoreDisplay.UpdateRewards(taggerRew, runnerRew);
+        }
     }
 
     public override void Heuristic(in ActionBuffers actionsOut)

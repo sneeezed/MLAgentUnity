@@ -1,12 +1,15 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro; // Add this line
 
 public class ScoreDisplay : MonoBehaviour
 {
     [Header("UI References")]
-    public Text taggerWinsText;
-    public Text runnerWinsText;
-    public Text currentRoundText;
+    public TMP_Text taggerWinsText;
+    public TMP_Text runnerWinsText;
+    public TMP_Text taggerRewardText;
+    public TMP_Text runnerRewardText;
+    public TMP_Text currentRoundText;
     
     [Header("Display Settings")]
     public bool showInGame = true;
@@ -15,6 +18,8 @@ public class ScoreDisplay : MonoBehaviour
     private int taggerWins = 0;
     private int runnerWins = 0;
     private int totalRounds = 0;
+    private float taggerReward = 0f;
+    private float runnerReward = 0f;
 
     private static ScoreDisplay instance;
 
@@ -34,6 +39,19 @@ public class ScoreDisplay : MonoBehaviour
     private void Start()
     {
         UpdateDisplay();
+    }
+
+    /// <summary>
+    /// Update the current rewards for both agents
+    /// </summary>
+    public static void UpdateRewards(float taggerRew, float runnerRew)
+    {
+        if (instance != null)
+        {
+            instance.taggerReward = taggerRew;
+            instance.runnerReward = runnerRew;
+            instance.UpdateDisplay();
+        }
     }
 
     /// <summary>
@@ -74,6 +92,8 @@ public class ScoreDisplay : MonoBehaviour
             instance.taggerWins = 0;
             instance.runnerWins = 0;
             instance.totalRounds = 0;
+            instance.taggerReward = 0f;
+            instance.runnerReward = 0f;
             instance.UpdateDisplay();
         }
     }
@@ -95,14 +115,19 @@ public class ScoreDisplay : MonoBehaviour
             runnerWinsText.text = $"🔵 Runner Wins: {runnerWins}";
         }
 
+        if (taggerRewardText != null)
+        {
+            taggerRewardText.text = $"🔴 Tagger Reward: {taggerReward:F3}";
+        }
+
+        if (runnerRewardText != null)
+        {
+            runnerRewardText.text = $"🔵 Runner Reward: {runnerReward:F3}";
+        }
+
         if (currentRoundText != null)
         {
-            float taggerWinRate = totalRounds > 0 ? (taggerWins / (float)totalRounds) * 100f : 0f;
-            float runnerWinRate = totalRounds > 0 ? (runnerWins / (float)totalRounds) * 100f : 0f;
-            
-            currentRoundText.text = $"Total Rounds: {totalRounds}\n" +
-                                   $"Tagger Win Rate: {taggerWinRate:F1}%\n" +
-                                   $"Runner Win Rate: {runnerWinRate:F1}%";
+            currentRoundText.text = $"Total Rounds: {totalRounds}";
         }
     }
 

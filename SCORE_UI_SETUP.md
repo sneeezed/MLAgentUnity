@@ -29,37 +29,38 @@ A clean UI display showing:
 3. In **Inspector**, adjust the panel:
    - **Rect Transform**:
      - Anchor: **Top Left** (click the square with the crosshair, then hold Shift+Alt and click top-left)
-     - Pos X: **120**, Pos Y: **-80**
-     - Width: **220**, Height: **140**
+     - Pos X: **120**, Pos Y: **-100**
+     - Width: **240**, Height: **200**
    - **Image** component:
      - Color: Black with alpha **150** (semi-transparent)
 
-### **Step 3: Create Tagger Wins Text**
+### **Step 3: Create Tagger Wins & Reward Text**
 
 1. Right-click on **ScorePanel** → **UI → Text**
 2. Rename to: `TaggerWinsText`
 3. Configure:
-   - **Rect Transform**: 
-     - Stretch horizontally and anchor at top
-     - Pos Y: **-10**, Height: **30**
-   - **Text** component:
-     - Text: `🔴 Tagger Wins: 0`
-     - Font Size: **18**
-     - Color: **Red** (R:255, G:0, B:0)
-     - Alignment: **Left & Middle**
+   - **Rect Transform**: Pos Y: **-10**, Height: **30**
+   - **Text**: `🔴 Tagger Wins: 0`, Color: **Red**, Size: **18**
 
-### **Step 4: Create Runner Wins Text**
+4. Right-click on **ScorePanel** → **UI → Text**
+5. Rename to: `TaggerRewardText`
+6. Configure:
+   - **Rect Transform**: Pos Y: **-40**, Height: **30**
+   - **Text**: `🔴 Tagger Reward: 0.000`, Color: **Red**, Size: **16**
+
+### **Step 4: Create Runner Wins & Reward Text**
 
 1. Right-click on **ScorePanel** → **UI → Text**
 2. Rename to: `RunnerWinsText`
 3. Configure:
-   - **Rect Transform**:
-     - Pos Y: **-45**, Height: **30**
-   - **Text** component:
-     - Text: `🔵 Runner Wins: 0`
-     - Font Size: **18**
-     - Color: **Blue** (R:0, G:100, B:255)
-     - Alignment: **Left & Middle**
+   - **Rect Transform**: Pos Y: **-80**, Height: **30**
+   - **Text**: `🔵 Runner Wins: 0`, Color: **Blue**, Size: **18**
+
+4. Right-click on **ScorePanel** → **UI → Text**
+5. Rename to: `RunnerRewardText`
+6. Configure:
+   - **Rect Transform**: Pos Y: **-110**, Height: **30**
+   - **Text**: `🔵 Runner Reward: 0.000`, Color: **Blue**, Size: **16**
 
 ### **Step 5: Create Stats Text**
 
@@ -67,7 +68,7 @@ A clean UI display showing:
 2. Rename to: `CurrentRoundText`
 3. Configure:
    - **Rect Transform**:
-     - Pos Y: **-95**, Height: **60**
+     - Pos Y: **-160**, Height: **30**
    - **Text** component:
      - Text: `Total Rounds: 0`
      - Font Size: **14**
@@ -83,6 +84,8 @@ A clean UI display showing:
 5. In the **ScoreDisplay** component, fill in:
    - **Tagger Wins Text**: Drag `TaggerWinsText` here
    - **Runner Wins Text**: Drag `RunnerWinsText` here
+   - **Tagger Reward Text**: Drag `TaggerRewardText` here
+   - **Runner Reward Text**: Drag `RunnerRewardText` here
    - **Current Round Text**: Drag `CurrentRoundText` here
    - **Show In Game**: ✅ Checked
 

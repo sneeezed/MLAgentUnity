@@ -23,6 +23,10 @@ MLAgent/Build/
 MLAgent/Builds/
 MLAgent/UserSettings/
 
+# Unity Plugins and Assets to Ignore
+MLAgent/Assets/TextMesh Pro/
+MLAgent/Assets/TextMesh Pro.meta
+
 # Unity Crash Logs
 MLAgent/*.log
 MLAgent/sysinfo.txt
