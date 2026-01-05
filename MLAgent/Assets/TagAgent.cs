@@ -12,10 +12,11 @@ public class TagAgent : Agent
     public Transform areaCenter; // Center point of play area
 
     [Header("Game Settings")]
-    public float moveSpeed = 5f; // Moderate speed when using VelocityChange
-    public float jumpForce = 5f; // How high the agent jumps
-    public float maxDistance = 15f; // Distance from center before penalty
-    public float tagDistance = 2f; // How close to be tagged
+    public float moveSpeed = 5f; 
+    public float turnSpeed = 200f; // New: How fast the agent rotates
+    public float jumpForce = 5f; 
+    public float maxDistance = 15f; 
+    public float tagDistance = 2f; 
     public int maxStepsPerEpisode = 500;
 
     [Header("Reward Settings")]
@@ -211,25 +212,28 @@ public class TagAgent : Agent
 
     public override void OnActionReceived(ActionBuffers actions)
     {
-        // Movement (Continuous Actions 0 and 1)
-        float moveX = actions.ContinuousActions[0];
-        float moveZ = actions.ContinuousActions[1];
-        
-        Vector3 movement = new Vector3(moveX, 0, moveZ) * moveSpeed;
-        // Use VelocityChange so movement is responsive but clamp top speed
-        rb.AddForce(movement, ForceMode.VelocityChange);
+        // 1. ROTATION (Action 1)
+        float rotateInput = actions.ContinuousActions[1];
+        transform.Rotate(0, rotateInput * turnSpeed * Time.fixedDeltaTime, 0);
 
-        // Jump (Continuous Action 2)
+        // 2. FORWARD MOVEMENT (Action 0)
+        float moveInput = actions.ContinuousActions[0];
+        Vector3 movement = transform.forward * moveInput * moveSpeed * 10f; // Multiplied by 10 for Force mode
+        rb.AddForce(movement, ForceMode.Force);
+
+        // 3. JUMP (Action 2)
         if (actions.ContinuousActions[2] > 0.5f && isGrounded)
         {
             rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
         }
 
-        // Clamp max speed for stability
+        // Clamp only HORIZONTAL speed (X and Z) so jumping (Y) isn't affected
+        Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
         float maxSpeed = 6f;
-        if (rb.linearVelocity.magnitude > maxSpeed)
+        if (horizontalVelocity.magnitude > maxSpeed)
         {
-            rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
+            Vector3 clampedVelocity = horizontalVelocity.normalized * maxSpeed;
+            rb.linearVelocity = new Vector3(clampedVelocity.x, rb.linearVelocity.y, clampedVelocity.z);
         }
 
         // Check if out of bounds
@@ -361,16 +365,18 @@ public class TagAgent : Agent
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            float horizontal = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal = -1f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal = 1f;
+            // Action 0: W/S for Forward/Backward
+            float forward = 0f;
+            if (keyboard.wKey.isPressed) forward = 1f;
+            if (keyboard.sKey.isPressed) forward = -1f;
             
-            float vertical = 0f;
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical = -1f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical = 1f;
+            // Action 1: A/D for Left/Right Rotation
+            float rotate = 0f;
+            if (keyboard.aKey.isPressed) rotate = -1f;
+            if (keyboard.dKey.isPressed) rotate = 1f;
             
-            continuousActions[0] = horizontal;
-            continuousActions[1] = vertical;
+            continuousActions[0] = forward;
+            continuousActions[1] = rotate;
 
             // Jump with Space
             continuousActions[2] = keyboard.spaceKey.isPressed ? 1f : 0f;
