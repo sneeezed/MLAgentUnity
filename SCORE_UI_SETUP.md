@@ -1,16 +1,3 @@
-# Score Display UI Setup Guide
-
-How to add a score counter showing Tagger vs Runner wins in your Unity game!
-
----
-
-## 🎯 What You'll Get
-
-A clean UI display showing:
-- 🔴 **Tagger Wins**: Total times tagger caught runner
-- 🔵 **Runner Wins**: Total times runner survived
-- **Win Rates**: Percentage breakdown
-- **Total Rounds**: Total episodes played
 
 ---
 
@@ -68,7 +55,7 @@ A clean UI display showing:
 2. Rename to: `CurrentRoundText`
 3. Configure:
    - **Rect Transform**:
-     - Pos Y: **-160**, Height: **30**
+     - Pos Y: **-160**, Height: **60**
    - **Text** component:
      - Text: `Total Rounds: 0`
      - Font Size: **14**

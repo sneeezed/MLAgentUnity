@@ -13,6 +13,7 @@ public class TagAgent : Agent
 
     [Header("Game Settings")]
     public float moveSpeed = 5f; // Moderate speed when using VelocityChange
+    public float jumpForce = 5f; // How high the agent jumps
     public float maxDistance = 15f; // Distance from center before penalty
     public float tagDistance = 2f; // How close to be tagged
     public int maxStepsPerEpisode = 500;
@@ -40,6 +41,7 @@ public class TagAgent : Agent
     private bool isTagger;
     private int stepCount;
     private float previousDistanceToOther;
+    private bool isGrounded; // Tracks if agent is on the floor
     
     // Stuck detection
     private Vector3 previousPosition;
@@ -154,6 +156,9 @@ public class TagAgent : Agent
 
     private void FixedUpdate()
     {
+        // Grounded check using a short raycast down
+        isGrounded = Physics.Raycast(transform.position, Vector3.down, 0.6f);
+        
         RequestDecision();
         stepCount++;
     }
@@ -164,6 +169,7 @@ public class TagAgent : Agent
         sensor.AddObservation(transform.localPosition); // 3
         sensor.AddObservation(rb.linearVelocity); // 3
         sensor.AddObservation(isTagger ? 1f : 0f); // 1 - role
+        sensor.AddObservation(isGrounded ? 1f : 0f); // 1 - NEW: Grounded state
 
         // Other agent observations
         if (otherAgent != null)
@@ -200,18 +206,24 @@ public class TagAgent : Agent
             sensor.AddObservation(Vector3.zero); // 3
         }
 
-        // Total observations: 23
+        // Total observations: 24 (was 23)
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
-        // Movement
+        // Movement (Continuous Actions 0 and 1)
         float moveX = actions.ContinuousActions[0];
         float moveZ = actions.ContinuousActions[1];
         
         Vector3 movement = new Vector3(moveX, 0, moveZ) * moveSpeed;
         // Use VelocityChange so movement is responsive but clamp top speed
         rb.AddForce(movement, ForceMode.VelocityChange);
+
+        // Jump (Continuous Action 2)
+        if (actions.ContinuousActions[2] > 0.5f && isGrounded)
+        {
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
+        }
 
         // Clamp max speed for stability
         float maxSpeed = 6f;
@@ -359,6 +371,9 @@ public class TagAgent : Agent
             
             continuousActions[0] = horizontal;
             continuousActions[1] = vertical;
+
+            // Jump with Space
+            continuousActions[2] = keyboard.spaceKey.isPressed ? 1f : 0f;
         }
     }
 
