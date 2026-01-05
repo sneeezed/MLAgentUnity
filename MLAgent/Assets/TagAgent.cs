@@ -23,9 +23,9 @@ public class TagAgent : Agent
     [Header("Reward Settings")]
     public float taggerCatchReward = 1.0f;
     public float runnerSurviveReward = 1.0f;
-    public float approachReward = 0.01f; // Tagger reward for getting closer
-    public float evadeReward = 0.01f; // Runner reward for getting farther
-    public float speedRewardMultiplier = 0.0003f;
+    public float approachReward = 0.5f; // Tagger reward multiplier for getting closer
+    public float evadeReward = 0.5f; // Runner reward multiplier for getting farther
+    public float facingReward = 0.001f; // Reward for facing the right way
     public float stuckPenalty = -0.005f;
     public float stuckTimeout = 5f;
 
@@ -167,42 +167,51 @@ public class TagAgent : Agent
 
     public override void CollectObservations(VectorSensor sensor)
     {
-        // Self observations
-        sensor.AddObservation(transform.localPosition); // 3
-        sensor.AddObservation(rb.linearVelocity); // 3
-        sensor.AddObservation(transform.up); // 3 - NEW: AI knows if it's tilted/upside down
-        sensor.AddObservation(transform.forward); // 3 - NEW: AI knows which way it's facing
-        sensor.AddObservation(isTagger ? 1f : 0f); // 1 - role
-        sensor.AddObservation(isGrounded ? 1f : 0f); // 1 - Grounded state
+        // 1. Role (1)
+        sensor.AddObservation(isTagger ? 1f : 0f);
 
-        // Other agent observations
+        // 2. Self observations (Relative to Area Center) (6)
+        Vector3 relativePosToCenter = transform.localPosition - areaCenter.localPosition;
+        sensor.AddObservation(relativePosToCenter / maxDistance); // Normalized position
+        sensor.AddObservation(rb.linearVelocity / moveSpeed); // Normalized velocity
+
+        // 3. Orientation & Spin (7)
+        sensor.AddObservation(transform.up); // 3
+        sensor.AddObservation(transform.forward); // 3
+        sensor.AddObservation(rb.angularVelocity.y / 10f); // 1 - Spin magnitude around UP
+
+        // 4. Grounded state (1)
+        sensor.AddObservation(isGrounded ? 1f : 0f);
+
+        // 5. Other agent observations (Relative) (7)
         if (otherAgent != null)
         {
-            sensor.AddObservation(otherAgent.transform.localPosition); // 3
-            sensor.AddObservation(otherAgent.rb.linearVelocity); // 3
+            Vector3 relativePosToOther = otherAgent.transform.localPosition - transform.localPosition;
+            sensor.AddObservation(relativePosToOther / (maxDistance * 2f)); // Normalized relative pos
             
-            Vector3 directionToOther = (otherAgent.transform.localPosition - transform.localPosition).normalized;
-            sensor.AddObservation(directionToOther); // 3
+            Vector3 relativeVelToOther = otherAgent.rb.linearVelocity - rb.linearVelocity;
+            sensor.AddObservation(relativeVelToOther / moveSpeed); // Normalized relative vel
             
             float distanceToOther = Vector3.Distance(transform.localPosition, otherAgent.transform.localPosition);
-            sensor.AddObservation(distanceToOther); // 1
+            sensor.AddObservation(distanceToOther / (maxDistance * 2f)); // Normalized distance
         }
         else
         {
-            sensor.AddObservation(Vector3.zero); // 3
             sensor.AddObservation(Vector3.zero); // 3
             sensor.AddObservation(Vector3.zero); // 3
             sensor.AddObservation(0f); // 1
         }
 
-        // Obstacle observations
+        // 6. Obstacle observations (Relative) (6)
         if (obstacleManager != null && obstacleManager.HasObstacle())
         {
             Vector3 obstaclePos = obstacleManager.GetObstaclePosition();
-            Rigidbody obstacleRb = obstacleManager.GetObstacleRigidbody();
+            Vector3 relativePosToObstacle = obstaclePos - transform.localPosition;
+            sensor.AddObservation(relativePosToObstacle / maxDistance); // 3
             
-            sensor.AddObservation(obstaclePos - transform.localPosition); // 3
-            sensor.AddObservation(obstacleRb != null ? obstacleRb.linearVelocity : Vector3.zero); // 3
+            Rigidbody obstacleRb = obstacleManager.GetObstacleRigidbody();
+            Vector3 relativeVelToObstacle = (obstacleRb != null ? obstacleRb.linearVelocity : Vector3.zero) - rb.linearVelocity;
+            sensor.AddObservation(relativeVelToObstacle / moveSpeed); // 3
         }
         else
         {
@@ -210,7 +219,7 @@ public class TagAgent : Agent
             sensor.AddObservation(Vector3.zero); // 3
         }
 
-        // Total observations: 30 (was 24)
+        // Total observations: 28 (cleaned up and normalized)
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -292,19 +301,25 @@ public class TagAgent : Agent
             // Shaped rewards based on role
             if (isTagger)
             {
-                // Reward tagger for getting closer
-                if (distanceToOther < previousDistanceToOther)
-                {
-                    AddReward(approachReward);
-                }
+                // Potential-based reward: reward for progress towards/away
+                float distanceChange = previousDistanceToOther - distanceToOther;
+                AddReward(distanceChange * approachReward);
+
+                // Reward for facing the runner
+                Vector3 dirToOther = (otherAgent.transform.localPosition - transform.localPosition).normalized;
+                float alignment = Vector3.Dot(transform.forward, dirToOther);
+                AddReward(alignment * facingReward);
             }
             else
             {
-                // Reward runner for getting farther
-                if (distanceToOther > previousDistanceToOther)
-                {
-                    AddReward(evadeReward);
-                }
+                // Potential-based reward: reward for progress towards/away
+                float distanceChange = distanceToOther - previousDistanceToOther;
+                AddReward(distanceChange * evadeReward);
+
+                // Reward for facing AWAY from the tagger
+                Vector3 dirAwayFromOther = (transform.localPosition - otherAgent.transform.localPosition).normalized;
+                float alignment = Vector3.Dot(transform.forward, dirAwayFromOther);
+                AddReward(alignment * facingReward);
             }
 
             previousDistanceToOther = distanceToOther;
@@ -356,13 +371,6 @@ public class TagAgent : Agent
         }
 
         previousPosition = transform.localPosition;
-
-        // Small speed reward when not stuck
-        if (stuckCounter == 0)
-        {
-            float speed = rb.linearVelocity.magnitude;
-            AddReward(speed * speedRewardMultiplier);
-        }
 
         // Small time penalty for efficiency
         AddReward(-0.0005f);
