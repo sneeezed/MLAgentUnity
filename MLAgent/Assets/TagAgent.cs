@@ -98,20 +98,21 @@ public class TagAgent : Agent
             AssignRole(thisIsTagger);
             otherAgent.AssignRole(!thisIsTagger);
 
-            // Spawn agents on opposite sides
-            float spawnDistance = 7f;
-            float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+            // Spawn agents on opposite sides (Smaller radius for smaller arena)
+            float spawnDistance = 5f; // Reduced from 7f to avoid walls
+            float angle = Random.value > 0.5f ? 0f : 180f; // Always spawn on the same line
+            float angleRad = angle * Mathf.Deg2Rad;
             
             transform.localPosition = new Vector3(
-                Mathf.Cos(angle) * spawnDistance,
+                Mathf.Cos(angleRad) * spawnDistance,
                 0.5f,
-                Mathf.Sin(angle) * spawnDistance
+                Mathf.Sin(angleRad) * spawnDistance
             );
             
             otherAgent.transform.localPosition = new Vector3(
-                Mathf.Cos(angle + Mathf.PI) * spawnDistance,
+                Mathf.Cos(angleRad + Mathf.PI) * spawnDistance,
                 0.5f,
-                Mathf.Sin(angle + Mathf.PI) * spawnDistance
+                Mathf.Sin(angleRad + Mathf.PI) * spawnDistance
             );
 
             // Spawn obstacle
