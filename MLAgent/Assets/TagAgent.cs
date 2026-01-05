@@ -13,11 +13,12 @@ public class TagAgent : Agent
 
     [Header("Game Settings")]
     public float moveSpeed = 5f; 
-    public float turnSpeed = 200f; // New: How fast the agent rotates
+    public float turnSpeed = 10f; // Significantly reduced for Torque mode
     public float jumpForce = 5f; 
     public float maxDistance = 15f; 
     public float tagDistance = 2f; 
     public int maxStepsPerEpisode = 500;
+    public float uprightForce = 5f; // New: Strength of the "keep upright" torque
 
     [Header("Reward Settings")]
     public float taggerCatchReward = 1.0f;
@@ -57,15 +58,14 @@ public class TagAgent : Agent
         agentRenderer = GetComponent<Renderer>();
         startPosition = transform.localPosition;
 
-        // Setup physics
+        // Setup physics for "Chaos" (Tumbling/Flipping)
         if (rb != null)
         {
-            rb.useGravity = true; // Enable gravity
-            rb.constraints = RigidbodyConstraints.FreezeRotationX | 
-                            RigidbodyConstraints.FreezeRotationY | 
-                            RigidbodyConstraints.FreezeRotationZ; // Freeze rotations but allow Y movement for gravity
-            rb.linearDamping = 0.1f;   // Slightly more drag to prevent sliding
-            rb.angularDamping = 0.1f;
+            rb.useGravity = true;
+            rb.constraints = RigidbodyConstraints.None; 
+            rb.linearDamping = 0.5f; 
+            rb.angularDamping = 1.0f; // Lowered from 2.0 to allow easier rotation
+            rb.centerOfMass = new Vector3(0, -0.4f, 0); 
         }
 
         // Setup obstacle manager (only once, from one agent)
@@ -169,8 +169,10 @@ public class TagAgent : Agent
         // Self observations
         sensor.AddObservation(transform.localPosition); // 3
         sensor.AddObservation(rb.linearVelocity); // 3
+        sensor.AddObservation(transform.up); // 3 - NEW: AI knows if it's tilted/upside down
+        sensor.AddObservation(transform.forward); // 3 - NEW: AI knows which way it's facing
         sensor.AddObservation(isTagger ? 1f : 0f); // 1 - role
-        sensor.AddObservation(isGrounded ? 1f : 0f); // 1 - NEW: Grounded state
+        sensor.AddObservation(isGrounded ? 1f : 0f); // 1 - Grounded state
 
         // Other agent observations
         if (otherAgent != null)
@@ -207,21 +209,36 @@ public class TagAgent : Agent
             sensor.AddObservation(Vector3.zero); // 3
         }
 
-        // Total observations: 24 (was 23)
+        // Total observations: 30 (was 24)
     }
 
     public override void OnActionReceived(ActionBuffers actions)
     {
         // 1. ROTATION (Action 1)
         float rotateInput = actions.ContinuousActions[1];
-        transform.Rotate(0, rotateInput * turnSpeed * Time.fixedDeltaTime, 0);
+        // Use VelocityChange for rotation so it's snappy regardless of friction
+        rb.AddTorque(Vector3.up * rotateInput * turnSpeed, ForceMode.VelocityChange);
 
         // 2. FORWARD MOVEMENT (Action 0)
         float moveInput = actions.ContinuousActions[0];
-        Vector3 movement = transform.forward * moveInput * moveSpeed * 10f; // Multiplied by 10 for Force mode
+        Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        Vector3 movement = flatForward * moveInput * moveSpeed * 10f; 
         rb.AddForce(movement, ForceMode.Force);
 
-        // 3. JUMP (Action 2)
+        // 3. SOFT KEEP UPRIGHT (Uses torque instead of hard MoveRotation)
+        if (isGrounded)
+        {
+            // Calculate how much we are tilted
+            Vector3 predictedUp = Quaternion.AngleAxis(
+                rb.angularVelocity.magnitude * Mathf.Rad2Deg * 0.1f, 
+                rb.angularVelocity
+            ) * transform.up;
+
+            Vector3 torqueVector = Vector3.Cross(predictedUp, Vector3.up);
+            rb.AddTorque(torqueVector * uprightForce * 10f, ForceMode.Acceleration);
+        }
+
+        // 4. JUMP (Action 2)
         if (actions.ContinuousActions[2] > 0.5f && isGrounded)
         {
             rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
