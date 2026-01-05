@@ -107,22 +107,22 @@ public class ScoreDisplay : MonoBehaviour
 
         if (taggerWinsText != null)
         {
-            taggerWinsText.text = $"🔴 Tagger Wins: {taggerWins}";
+            taggerWinsText.text = $"<color=red>Tagger</color> Wins: {taggerWins}";
         }
 
         if (runnerWinsText != null)
         {
-            runnerWinsText.text = $"🔵 Runner Wins: {runnerWins}";
+            runnerWinsText.text = $"<color=blue>Runner</color> Wins: {runnerWins}";
         }
 
         if (taggerRewardText != null)
         {
-            taggerRewardText.text = $"🔴 Tagger Reward: {taggerReward:F3}";
+            taggerRewardText.text = $"<color=red>Tagger</color> Reward: {taggerReward:F3}";
         }
 
         if (runnerRewardText != null)
         {
-            runnerRewardText.text = $"🔵 Runner Reward: {runnerReward:F3}";
+            runnerRewardText.text = $"<color=blue>Runner</color> Reward: {runnerReward:F3}";
         }
 
         if (currentRoundText != null)
