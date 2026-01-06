@@ -23,9 +23,9 @@ public class TagAgent : Agent
     [Header("Reward Settings")]
     public float taggerCatchReward = 1.0f;
     public float runnerSurviveReward = 1.0f;
-    public float approachReward = 0.5f; // Tagger reward multiplier for getting closer
-    public float evadeReward = 0.5f; // Runner reward multiplier for getting farther
-    public float facingReward = 0.001f; // Reward for facing the right way
+    public float approachReward = 2.0f; // Increased from 0.5f to make progress more impactful
+    public float evadeReward = 2.0f; // Increased from 0.5f to make evasion more impactful
+    public float facingReward = 0.0001f; // Significantly reduced so it doesn't cause visible reward loss
     public float stuckPenalty = -0.005f;
     public float stuckTimeout = 5f;
 
