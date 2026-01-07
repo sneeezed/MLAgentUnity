@@ -13,22 +13,21 @@ public class TagAgent : Agent
 
     [Header("Game Settings")]
     public float moveSpeed = 5f; 
-    public float turnSpeed = 10f; // Significantly reduced for Torque mode
+    public float turnSpeed = 10f; //watch out if you change friction also change this
     public float jumpForce = 5f; 
     public float maxDistance = 15f; 
     public float tagDistance = 2f; 
     public int maxStepsPerEpisode = 500;
-    public float uprightForce = 5f; // New: Strength of the "keep upright" torque
+    public float uprightForce = 5f; 
 
     [Header("Reward Settings")]
     public float taggerCatchReward = 1.0f;
     public float runnerSurviveReward = 1.0f;
-    public float approachReward = 2.0f; // Increased from 0.5f to make progress more impactful
-    public float evadeReward = 2.0f; // Increased from 0.5f to make evasion more impactful
-    public float facingReward = 0.0001f; // Significantly reduced so it doesn't cause visible reward loss
+    public float approachReward = 2.0f; // 
+    public float evadeReward = 2.0f; // 
+    public float facingReward = 0.0001f; // prolly just delete this idk
     public float stuckPenalty = -0.005f;
-    public float stuckTimeout = 5f;
-
+    public float stuckTimeout = 5f; // maybe lower this cuz it makes the runner sad
     [Header("Visual")]
     public Material taggerMaterial; // Red material for tagger
     public Material runnerMaterial; // Blue material for runner
@@ -372,8 +371,13 @@ public class TagAgent : Agent
 
         previousPosition = transform.localPosition;
 
-        // Small time penalty for efficiency
-        AddReward(-0.0005f);
+        // Dynamic Time Penalty: Only penalize if they aren't making significant distance progress
+        // This stops the constant "drain" when they are actually doing their job
+        float speed = rb.linearVelocity.magnitude;
+        if (speed < 1.0f) 
+        {
+            AddReward(-0.0005f);
+        }
 
         // Update score display with current rewards (only the spawner does this)
         if (isSpawner && otherAgent != null)

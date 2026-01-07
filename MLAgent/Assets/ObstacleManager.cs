@@ -6,7 +6,7 @@ public class ObstacleManager : MonoBehaviour
     public GameObject existingObstacle; // Drag your existing obstacle here!
     public GameObject obstaclePrefab; // Only used if no existing obstacle
     public Vector3 obstacleSize = new Vector3(2f, 0.5f, 1f); // Rectangular shape
-    public float obstacleMass = 1f; // Mass affects how easy it is to push
+    public float obstacleMass = 100f; // Mass increased for ramp stability
 
     [Header("Spawn Settings")]
     public Vector3 centerSpawnPosition = new Vector3(0f, 0.2f, 0f); // Center spawn position
@@ -39,9 +39,9 @@ public class ObstacleManager : MonoBehaviour
     {
         obstaclePrefab = new GameObject("ObstaclePrefab");
 
-        // Add cube mesh and scale it to be rectangular
+        // Add mesh and scale it
         var meshFilter = obstaclePrefab.AddComponent<MeshFilter>();
-        meshFilter.mesh = CreateCubeMesh();
+        meshFilter.mesh = CreateRampMesh(); // Use the new Ramp Mesh
 
         var meshRenderer = obstaclePrefab.AddComponent<MeshRenderer>();
         meshRenderer.material = new Material(Shader.Find("Standard"));
@@ -52,17 +52,65 @@ public class ObstacleManager : MonoBehaviour
         rb.mass = obstacleMass;
         rb.linearDamping = 0.1f; // Slight drag
         rb.angularDamping = 0.1f;
-        rb.isKinematic = false; // Make sure it's not kinematic
-        rb.useGravity = true; // Enable gravity so it falls naturally
-        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright but allow Y movement
-
-        var boxCollider = obstaclePrefab.AddComponent<BoxCollider>();
+        rb.isKinematic = false; 
+        rb.useGravity = true; 
+        
+        // Use MeshCollider for complex shapes like ramps
+        var meshCollider = obstaclePrefab.AddComponent<MeshCollider>();
+        meshCollider.sharedMesh = meshFilter.mesh;
+        meshCollider.convex = true;
 
         // Scale to rectangular shape
         obstaclePrefab.transform.localScale = obstacleSize;
 
         // Don't activate the prefab
         obstaclePrefab.SetActive(false);
+    }
+
+    /// <summary>
+    /// Creates a triangular prism mesh (Ramp)
+    /// </summary>
+    private Mesh CreateRampMesh()
+    {
+        Mesh mesh = new Mesh();
+        mesh.name = "RampMesh";
+
+        // Define vertices for a triangular prism (Ramp)
+        // This creates a ramp where the slope goes from Z=0.5 to Z=-0.5
+        Vector3[] vertices = new Vector3[]
+        {
+            // Bottom square
+            new Vector3(-0.5f, -0.5f, -0.5f), // 0
+            new Vector3(0.5f, -0.5f, -0.5f),  // 1
+            new Vector3(0.5f, -0.5f, 0.5f),   // 2
+            new Vector3(-0.5f, -0.5f, 0.5f),  // 3
+            
+            // Top edge (the "peak" of the ramp - aligned with the back)
+            new Vector3(-0.5f, 0.5f, 0.5f),   // 4
+            new Vector3(0.5f, 0.5f, 0.5f)     // 5
+        };
+
+        // Define triangles
+        int[] triangles = new int[]
+        {
+            // Bottom
+            0, 1, 2, 0, 2, 3,
+            // Back face (Square)
+            2, 5, 4, 2, 4, 3,
+            // Slope (The actual ramp)
+            0, 4, 5, 0, 5, 1,
+            // Left side (Triangle)
+            0, 3, 4,
+            // Right side (Triangle)
+            1, 5, 2
+        };
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
     }
 
     /// <summary>
@@ -244,19 +292,22 @@ public class ObstacleManager : MonoBehaviour
         rb.useGravity = true; // Enable gravity so it falls naturally to ground
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ; // Keep upright, but allow Y movement for gravity
 
-        // Add BoxCollider if not present
-        var collider = obstacle.GetComponent<BoxCollider>();
-        if (collider == null)
+        // Use MeshCollider for the ramp
+        var meshCollider = obstacle.GetComponent<MeshCollider>();
+        if (meshCollider == null)
         {
-            collider = obstacle.AddComponent<BoxCollider>();
-        }
+            // Remove BoxCollider if it exists
+            var boxCollider = obstacle.GetComponent<BoxCollider>();
+            if (boxCollider != null) DestroyImmediate(boxCollider);
 
-        // Ensure collider matches the object size
-        collider.size = obstacleSize;
-        collider.center = Vector3.zero;
+            meshCollider = obstacle.AddComponent<MeshCollider>();
+            var meshFilter = obstacle.GetComponent<MeshFilter>();
+            if (meshFilter != null) meshCollider.sharedMesh = meshFilter.sharedMesh;
+        }
+        meshCollider.convex = true;
 
         // Debug log to confirm physics setup
-        Debug.Log($"Obstacle physics setup: Mass={rb.mass}, Kinematic={rb.isKinematic}, Gravity={rb.useGravity}, Collider={collider != null}");
+        Debug.Log($"Obstacle physics setup: Mass={rb.mass}, Kinematic={rb.isKinematic}, Gravity={rb.useGravity}, Collider={meshCollider != null}");
     }
 
     /// <summary>
