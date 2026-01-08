@@ -21,11 +21,11 @@ public class TagAgent : Agent
     public float uprightForce = 5f; 
 
     [Header("Reward Settings")]
-    public float taggerCatchReward = 1.0f;
-    public float runnerSurviveReward = 1.0f;
-    public float approachReward = 2.0f; // 
-    public float evadeReward = 2.0f; // 
-    public float facingReward = 0.0001f; // prolly just delete this idk
+    public float taggerCatchReward = 10.0f;
+    public float runnerSurviveReward = 10.0f;
+    public float approachReward = 0.3f; // 
+    public float evadeReward = 0.3f; // 
+    public float facingReward = 0.0001f; // 
     public float stuckPenalty = -0.005f;
     public float stuckTimeout = 5f; // maybe lower this cuz it makes the runner sad
     [Header("Visual")]
@@ -266,7 +266,7 @@ public class TagAgent : Agent
         float distanceFromCenter = Vector3.Distance(transform.localPosition, areaCenter.localPosition);
         if (transform.localPosition.y < -1f || distanceFromCenter > maxDistance)
         {
-            SetReward(-1.0f);
+            SetReward(0f);
             EndEpisode();
             if (otherAgent != null) otherAgent.EndEpisode();
             return;
@@ -284,12 +284,14 @@ public class TagAgent : Agent
                 {
                     SetReward(taggerCatchReward);
                     otherAgent.SetReward(-runnerSurviveReward);
+                    Debug.Log($"<color=red>[WIN] Tagger tagged Runner!</color> Distance: {distanceToOther:F2}");
                     ScoreDisplay.TaggerWon(); // Update score display
                 }
                 else
                 {
                     SetReward(-runnerSurviveReward);
                     otherAgent.SetReward(taggerCatchReward);
+                    Debug.Log($"<color=blue>[WIN] Runner tagged Tagger (Self-Tag)!</color> Distance: {distanceToOther:F2}");
                     ScoreDisplay.TaggerWon(); // Update score display
                 }
                 EndEpisode();
@@ -304,10 +306,10 @@ public class TagAgent : Agent
                 float distanceChange = previousDistanceToOther - distanceToOther;
                 AddReward(distanceChange * approachReward);
 
-                // Reward for facing the runner
-                Vector3 dirToOther = (otherAgent.transform.localPosition - transform.localPosition).normalized;
-                float alignment = Vector3.Dot(transform.forward, dirToOther);
-                AddReward(alignment * facingReward);
+                // Facing reward disabled - was causing noise
+                // Vector3 dirToOther = (otherAgent.transform.localPosition - transform.localPosition).normalized;
+                // float alignment = Vector3.Dot(transform.forward, dirToOther);
+                // AddReward(alignment * facingReward);
             }
             else
             {
@@ -315,10 +317,10 @@ public class TagAgent : Agent
                 float distanceChange = distanceToOther - previousDistanceToOther;
                 AddReward(distanceChange * evadeReward);
 
-                // Reward for facing AWAY from the tagger
-                Vector3 dirAwayFromOther = (transform.localPosition - otherAgent.transform.localPosition).normalized;
-                float alignment = Vector3.Dot(transform.forward, dirAwayFromOther);
-                AddReward(alignment * facingReward);
+                // Facing reward disabled - was causing noise
+                // Vector3 dirAwayFromOther = (transform.localPosition - otherAgent.transform.localPosition).normalized;
+                // float alignment = Vector3.Dot(transform.forward, dirAwayFromOther);
+                // AddReward(alignment * facingReward);
             }
 
             previousDistanceToOther = distanceToOther;
@@ -335,6 +337,7 @@ public class TagAgent : Agent
             {
                 SetReward(runnerSurviveReward); // Runner survived!
             }
+            Debug.Log("<color=green>[WIN] Runner Survived (Timeout)!</color>");
             ScoreDisplay.RunnerWon(); // Update score display
             EndEpisode();
             if (otherAgent != null) otherAgent.EndEpisode();
@@ -371,12 +374,15 @@ public class TagAgent : Agent
 
         previousPosition = transform.localPosition;
 
-        // Dynamic Time Penalty: Only penalize if they aren't making significant distance progress
-        // This stops the constant "drain" when they are actually doing their job
-        float speed = rb.linearVelocity.magnitude;
-        if (speed < 1.0f) 
+        // Dynamic Time Penalty: Only penalize TAGGER for being too slow
+        // Runner shouldn't be penalized for moving slowly if they're successfully evading
+        if (isTagger)
         {
-            AddReward(-0.0005f);
+            float speed = rb.linearVelocity.magnitude;
+            if (speed < 1.0f) 
+            {
+                AddReward(-0.0005f);
+            }
         }
 
         // Update score display with current rewards (only the spawner does this)
