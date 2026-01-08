@@ -120,7 +120,9 @@ public class ObstacleManager : MonoBehaviour
     {
         Debug.Log("=== SpawnObstacle called ===");
         
-        Debug.Log("=== SpawnObstacle called ===");
+        // Calculate spawn position relative to this transform (local to the arena)
+        Vector3 spawnPosition = transform.TransformPoint(centerSpawnPosition);
+        
         // Check if user assigned an existing obstacle
         if (existingObstacle != null)
         {
@@ -129,9 +131,9 @@ public class ObstacleManager : MonoBehaviour
             // Use the existing obstacle - just reset its position
             currentObstacle = existingObstacle;
             
-            // Reset position to center
-            Debug.Log($"Moving obstacle from {currentObstacle.transform.position} to {centerSpawnPosition}");
-            currentObstacle.transform.position = centerSpawnPosition;
+            // Reset position to center of arena
+            Debug.Log($"Moving obstacle from {currentObstacle.transform.position} to {spawnPosition}");
+            currentObstacle.transform.position = spawnPosition;
             
             // Random rotation (only around Y axis to keep it upright)
             Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
@@ -178,9 +180,8 @@ public class ObstacleManager : MonoBehaviour
                 return;
             }
 
-            // Always spawn at center of arena
-            Vector3 spawnPosition = centerSpawnPosition;
-
+            // Always spawn at center of arena (already calculated relative to transform)
+            
             // Random rotation (only around Y axis to keep it upright)
             Quaternion randomRotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
 
@@ -192,11 +193,11 @@ public class ObstacleManager : MonoBehaviour
             // Ensure the obstacle has proper physics components
             SetupObstaclePhysics(currentObstacle);
 
-            Debug.Log($"✅ New obstacle spawned at center {centerSpawnPosition}");
+            Debug.Log($"✅ New obstacle spawned at relative center {spawnPosition}");
         }
 
         // Store start position and rotation for potential reset
-        obstacleStartPosition = centerSpawnPosition;
+        obstacleStartPosition = spawnPosition;
         obstacleStartRotation = currentObstacle.transform.rotation;
     }
 
@@ -207,7 +208,7 @@ public class ObstacleManager : MonoBehaviour
     {
         if (currentObstacle != null)
         {
-            currentObstacle.transform.position = centerSpawnPosition;
+            currentObstacle.transform.position = transform.TransformPoint(centerSpawnPosition);
             currentObstacle.transform.rotation = obstacleStartRotation;
 
             // Reset physics velocities

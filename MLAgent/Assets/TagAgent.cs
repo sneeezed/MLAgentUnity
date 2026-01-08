@@ -44,6 +44,11 @@ public class TagAgent : Agent
     private float previousDistanceToOther;
     private bool isGrounded; // Tracks if agent is on the floor
     
+    // Static counters for logging (Shared across all parallel agents)
+    private static int totalGamesPlayed = 0;
+    private static int totalTaggerWins = 0;
+    private static int totalRunnerWins = 0;
+
     // Stuck detection
     private Vector3 previousPosition;
     private int stuckCounter;
@@ -284,14 +289,30 @@ public class TagAgent : Agent
                 {
                     SetReward(taggerCatchReward);
                     otherAgent.SetReward(-runnerSurviveReward);
-                    Debug.Log($"<color=red>[WIN] Tagger tagged Runner!</color> Distance: {distanceToOther:F2}");
+                    
+                    if (isSpawner)
+                    {
+                        totalGamesPlayed++;
+                        totalTaggerWins++;
+                        LogStats("Tagger");
+                    }
+                    
+                    Debug.Log($"<color=red>[WIN] Tagger tagged Runner!</color> Total Games: {totalGamesPlayed} | Tagger ELO: {totalTaggerWins}");
                     ScoreDisplay.TaggerWon(); // Update score display
                 }
                 else
                 {
                     SetReward(-runnerSurviveReward);
                     otherAgent.SetReward(taggerCatchReward);
-                    Debug.Log($"<color=blue>[WIN] Runner tagged Tagger (Self-Tag)!</color> Distance: {distanceToOther:F2}");
+
+                    if (isSpawner)
+                    {
+                        totalGamesPlayed++;
+                        totalTaggerWins++; // In self-tag, Tagger still technically "won" the interaction
+                        LogStats("Tagger");
+                    }
+
+                    Debug.Log($"<color=blue>[WIN] Runner tagged Tagger (Self-Tag)!</color> Total Games: {totalGamesPlayed}");
                     ScoreDisplay.TaggerWon(); // Update score display
                 }
                 EndEpisode();
@@ -337,7 +358,15 @@ public class TagAgent : Agent
             {
                 SetReward(runnerSurviveReward); // Runner survived!
             }
-            Debug.Log("<color=green>[WIN] Runner Survived (Timeout)!</color>");
+
+            if (isSpawner)
+            {
+                totalGamesPlayed++;
+                totalRunnerWins++;
+                LogStats("Runner");
+            }
+
+            Debug.Log($"<color=green>[WIN] Runner Survived (Timeout)!</color> Total Games: {totalGamesPlayed} | Runner Wins: {totalRunnerWins}");
             ScoreDisplay.RunnerWon(); // Update score display
             EndEpisode();
             if (otherAgent != null) otherAgent.EndEpisode();
@@ -430,6 +459,27 @@ public class TagAgent : Agent
             // Draw tag radius
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, tagDistance);
+        }
+    }
+
+    private void LogStats(string winner)
+    {
+        // 1. Log to TensorBoard
+        // This will create new graphs in TensorBoard under the "CustomStats" category
+        var stats = Academy.Instance.StatsRecorder;
+        stats.Add("Games/TotalPlayed", totalGamesPlayed);
+        stats.Add("Games/TaggerWins", totalTaggerWins);
+        stats.Add("Games/RunnerWins", totalRunnerWins);
+        
+        float taggerWinRate = (float)totalTaggerWins / totalGamesPlayed;
+        stats.Add("WinRate/Tagger", taggerWinRate);
+        stats.Add("WinRate/Runner", 1.0f - taggerWinRate);
+
+        // 2. Info for Terminal (via ML-Agents internal logging)
+        // These will show up in your terminal summary every 'summary_freq' steps
+        if (totalGamesPlayed % 10 == 0)
+        {
+            Debug.Log($"[STATS] Step: {Academy.Instance.StepCount} | Games: {totalGamesPlayed} | Tagger Wins: {totalTaggerWins} | Runner Wins: {totalRunnerWins}");
         }
     }
 }
