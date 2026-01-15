@@ -53,7 +53,6 @@ public class PlayerControlUI : MonoBehaviour
         
         GUILayout.EndArea();
         
-        // Agent status panel
         GUI.Box(new Rect(10, 220, 300, 120), "");
         
         GUILayout.BeginArea(new Rect(20, 230, 280, 100));

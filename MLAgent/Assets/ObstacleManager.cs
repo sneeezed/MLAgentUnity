@@ -1,3 +1,5 @@
+//alot of this code was taken from obsticall manager tutorial on yotube
+
 using UnityEngine;
 
 public class ObstacleManager : MonoBehaviour
@@ -45,12 +47,12 @@ public class ObstacleManager : MonoBehaviour
 
         var meshRenderer = obstaclePrefab.AddComponent<MeshRenderer>();
         meshRenderer.material = new Material(Shader.Find("Standard"));
-        meshRenderer.material.color = new Color(0.8f, 0.3f, 0.1f); // Orange color
+        meshRenderer.material.color = new Color(0.8f, 0.3f, 0.1f); // color
 
         // Add physics components
         var rb = obstaclePrefab.AddComponent<Rigidbody>();
         rb.mass = obstacleMass;
-        rb.linearDamping = 0.1f; // Slight drag
+        rb.linearDamping = 0.1f; // Slight drag might change
         rb.angularDamping = 0.1f;
         rb.isKinematic = false; 
         rb.useGravity = true; 
@@ -75,7 +77,7 @@ public class ObstacleManager : MonoBehaviour
         Mesh mesh = new Mesh();
         mesh.name = "RampMesh";
 
-        // Define vertices for a triangular prism (Ramp)
+        // this is stuff for ramps idk how it works if sormthing breaks its here prolly
         // This creates a ramp where the slope goes from Z=0.5 to Z=-0.5
         Vector3[] vertices = new Vector3[]
         {
@@ -90,7 +92,7 @@ public class ObstacleManager : MonoBehaviour
             new Vector3(0.5f, 0.5f, 0.5f)     // 5
         };
 
-        // Define triangles
+        // def triangles
         int[] triangles = new int[]
         {
             // Bottom
@@ -145,11 +147,11 @@ public class ObstacleManager : MonoBehaviour
             {
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
-                Debug.Log("✅ Physics velocities reset to zero");
+                Debug.Log(" velocities reset to zero");
             }
             else
             {
-                Debug.LogWarning("⚠️ Obstacle has no Rigidbody!");
+                Debug.LogWarning(" Obstacle has no Rigidbody!");
             }
             
             // Make sure it's active
@@ -158,11 +160,11 @@ public class ObstacleManager : MonoBehaviour
             // Ensure physics is set up properly
             SetupObstaclePhysics(currentObstacle);
             
-            Debug.Log($"✅ Existing obstacle '{existingObstacle.name}' reset to center {centerSpawnPosition}");
+            Debug.Log($"Existing obstacle '{existingObstacle.name}' reset to center {centerSpawnPosition}");
         }
         else
         {
-            Debug.LogWarning("⚠️ No existing obstacle linked! Trying to create dynamic obstacle...");
+            Debug.LogWarning(" No existing obstacle linked! Trying to create dynamic obstacle...");
             
             // No existing obstacle - create a new one dynamically
             
@@ -175,8 +177,8 @@ public class ObstacleManager : MonoBehaviour
             // Check if we have a prefab
             if (obstaclePrefab == null)
             {
-                Debug.LogError("❌ No obstacle prefab and no existing obstacle! Can't spawn obstacle!");
-                Debug.LogError("💡 FIX: Drag your obstacle from the scene to the 'Existing Obstacle' field in ObstacleManager!");
+                Debug.LogError("No obstacle prefab and no existing obstacle! Can't spawn obstacle!");
+                Debug.LogError("FIX: Drag your obstacle from the scene to the 'Existing Obstacle' field in ObstacleManager!");
                 return;
             }
 
@@ -193,7 +195,7 @@ public class ObstacleManager : MonoBehaviour
             // Ensure the obstacle has proper physics components
             SetupObstaclePhysics(currentObstacle);
 
-            Debug.Log($"✅ New obstacle spawned at relative center {spawnPosition}");
+            Debug.Log($"New obstacle spawned at relative center {spawnPosition}");
         }
 
         // Store start position and rotation for potential reset

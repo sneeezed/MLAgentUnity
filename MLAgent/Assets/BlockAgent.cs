@@ -1,3 +1,6 @@
+//almost none of this code is mine
+
+
 using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
@@ -11,12 +14,12 @@ public class BlockAgent : Agent
     public ObstacleManager obstacleManager;
 
     [Header("Settings")]
-    public float moveSpeed = 8f; // Increased for better obstacle pushing
+    public float moveSpeed = 8f; 
     public float maxDistance = 10f;
-    public float speedRewardMultiplier = 0.0005f; // Reduced to prevent spinning
-    public float stuckPenalty = -0.005f; // Penalty for being stuck/not moving
-    public float obstacleCollisionPenalty = -0.01f; // Penalty for hitting obstacles
-    public float stuckTimeout = 5f; // Seconds before forcing episode end when stuck
+    public float speedRewardMultiplier = 0.0005f; 
+    public float stuckPenalty = -0.005f; 
+    public float obstacleCollisionPenalty = -0.01f; 
+    public float stuckTimeout = 5f; 
 
     private Rigidbody rb;
     private Vector3 startPosition;
@@ -29,7 +32,7 @@ public class BlockAgent : Agent
         rb = GetComponent<Rigidbody>();
         startPosition = transform.localPosition;
 
-        // Ensure agent has proper physics for obstacle interaction
+        // mak agent has proper physics for obstacle interaction
         if (rb != null)
         {
             rb.useGravity = false; // No gravity in plane environment

@@ -9,11 +9,11 @@ public class TagAgent : Agent
     [Header("References")]
     public TagAgent otherAgent; // Reference to the other agent
     public ObstacleManager obstacleManager;
-    public Transform areaCenter; // Center point of play area
+    public Transform areaCenter; // Center point of play area so when making parllel stuff make sure to fix that
 
     [Header("Game Settings")]
     public float moveSpeed = 5f; 
-    public float turnSpeed = 10f; //watch out if you change friction also change this
+    public float turnSpeed = 10f; //watch out if u change friction also change this
     public float jumpForce = 5f; 
     public float maxDistance = 15f; 
     public float tagDistance = 2f; 
@@ -68,11 +68,11 @@ public class TagAgent : Agent
             rb.useGravity = true;
             rb.constraints = RigidbodyConstraints.None; 
             rb.linearDamping = 0.5f; 
-            rb.angularDamping = 1.0f; // Lowered from 2.0 to allow easier rotation
+            rb.angularDamping = 1.0f; // Lowered from 2.0 cuz easier rotation
             rb.centerOfMass = new Vector3(0, -0.4f, 0); 
         }
 
-        // Setup obstacle manager (only once, from one agent)
+        // Setup obstacle manager (only onc from one agent)
         if (obstacleManager != null && otherAgent != null)
         {
             obstacleManager.target = transform; // Use one agent as reference
@@ -82,13 +82,11 @@ public class TagAgent : Agent
 
     public override void OnEpisodeBegin()
     {
-        // Reset agent
         transform.localPosition = startPosition;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         transform.rotation = Quaternion.identity;
         
-        // Reset stuck detection
         previousPosition = startPosition;
         stuckCounter = 0;
         stuckStartTime = -1f;
@@ -102,7 +100,7 @@ public class TagAgent : Agent
             AssignRole(thisIsTagger);
             otherAgent.AssignRole(!thisIsTagger);
 
-            // Spawn agents on opposite sides (Smaller radius for smaller arena)
+            // Spawn agents on opposite sides (smaller radius for smaller arena)
             float spawnDistance = 5f; // Reduced from 7f to avoid walls
             float angle = Random.value > 0.5f ? 0f : 180f; // Always spawn on the same line
             float angleRad = angle * Mathf.Deg2Rad;
@@ -168,18 +166,18 @@ public class TagAgent : Agent
         RequestDecision();
         stepCount++;
     }
-
+// theres are all the vector observations, theres around 30, what goes into the model
     public override void CollectObservations(VectorSensor sensor)
     {
-        // 1. Role (1)
+        // Role (1)
         sensor.AddObservation(isTagger ? 1f : 0f);
 
-        // 2. Self observations (Relative to Area Center) (6)
+        // Self observations (Relative to Area Center) (6)
         Vector3 relativePosToCenter = transform.localPosition - areaCenter.localPosition;
         sensor.AddObservation(relativePosToCenter / maxDistance); // Normalized position
         sensor.AddObservation(rb.linearVelocity / moveSpeed); // Normalized velocity
 
-        // 3. Orientation & Spin (7)
+        // Orientation & Spin (7)
         sensor.AddObservation(transform.up); // 3
         sensor.AddObservation(transform.forward); // 3
         sensor.AddObservation(rb.angularVelocity.y / 10f); // 1 - Spin magnitude around UP
@@ -223,7 +221,7 @@ public class TagAgent : Agent
             sensor.AddObservation(Vector3.zero); // 3
         }
 
-        // Total observations: 28 (cleaned up and normalized)
+        // Total observations: 28 (acutally might be 30 i forgot)
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -443,7 +441,7 @@ public class TagAgent : Agent
             continuousActions[0] = forward;
             continuousActions[1] = rotate;
 
-            // Jump with Space
+            // Jump with Space 
             continuousActions[2] = keyboard.spaceKey.isPressed ? 1f : 0f;
         }
     }
@@ -464,22 +462,14 @@ public class TagAgent : Agent
 
     private void LogStats(string winner)
     {
-        // 1. Log to TensorBoard
-        // This will create new graphs in TensorBoard under the "CustomStats" category
+        // Send data to TensorBoard idk what this eaxctly is if something breaks its from here
         var stats = Academy.Instance.StatsRecorder;
+        
         stats.Add("Games/TotalPlayed", totalGamesPlayed);
         stats.Add("Games/TaggerWins", totalTaggerWins);
         stats.Add("Games/RunnerWins", totalRunnerWins);
         
-        float taggerWinRate = (float)totalTaggerWins / totalGamesPlayed;
+        float taggerWinRate = totalGamesPlayed > 0 ? (float)totalTaggerWins / totalGamesPlayed : 0;
         stats.Add("WinRate/Tagger", taggerWinRate);
-        stats.Add("WinRate/Runner", 1.0f - taggerWinRate);
-
-        // 2. Info for Terminal (via ML-Agents internal logging)
-        // These will show up in your terminal summary every 'summary_freq' steps
-        if (totalGamesPlayed % 10 == 0)
-        {
-            Debug.Log($"[STATS] Step: {Academy.Instance.StepCount} | Games: {totalGamesPlayed} | Tagger Wins: {totalTaggerWins} | Runner Wins: {totalRunnerWins}");
-        }
     }
 }

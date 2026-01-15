@@ -61,8 +61,8 @@ if __name__ == "__main__":
     success = export_model(checkpoint_path, output_path)
     
     if success:
-        print(f"\n✅ Model exported successfully to {output_path}")
+        print(f"\n Model exported successfully to {output_path}")
     else:
-        print(f"\n❌ Export failed")
+        print(f"\n Export failed")
         sys.exit(1)
 
